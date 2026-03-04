@@ -1,1 +1,2140 @@
+```yaml
+openapi: 3.0.3
+info:
+  title: World Strongman Platform MVP API
+  description: |
+    World Strongman (WSM) Platform MVP API.
+    Ranking Policy v1.1: Placement System B + Tournament Coefficient Q.
+    Lifecycle: DRAFT → SUBMITTED → APPROVED → LIVE → RESULTS_VALIDATED → LOCKED
+  version: 1.0.0
+  contact:
+    name: WSM Platform Team
 
+servers:
+  - url: https://api.wsm-platform.com/v1
+    description: Production server
+
+security:
+  - BearerAuth: []
+
+paths:
+  # AUTH
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Authenticate user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /me:
+    get:
+      tags: [Auth]
+      summary: Get current user profile
+      responses:
+        '200':
+          description: User profile retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # PUBLIC
+  /ranking:
+    get:
+      tags: [Public]
+      summary: Get global ranking
+      security: []
+      parameters:
+        - name: division
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [MEN, WOMEN, PARA]
+        - name: format
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [CLASSIC, PARA, RELAY, TEAM_BATTLE]
+        - name: weight_class
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: as_of_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: country_code
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: '^[A-Z]{3}$'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Ranking list retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RankingList'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /athletes/{wsm_athlete_id}:
+    get:
+      tags: [Public]
+      summary: Get athlete public profile
+      security: []
+      parameters:
+        - name: wsm_athlete_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^ATH-[A-Z0-9]{6}$'
+      responses:
+        '200':
+          description: Athlete profile retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AthleteProfile'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /events/{event_id}:
+    get:
+      tags: [Public]
+      summary: Get event details
+      security: []
+      parameters:
+        - name: event_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Event retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /events/{event_id}/divisions/{event_division_id}/results:
+    get:
+      tags: [Public]
+      summary: Get division results (vitrine)
+      security: []
+      parameters:
+        - name: event_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: event_division_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Results retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DivisionResultsPublic'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ORGANIZER
+  /events:
+    get:
+      tags: [Organizer]
+      summary: List events
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [DRAFT, ACTIVE, ARCHIVED]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Events list retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Event'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [Organizer]
+      summary: Create new event
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEventRequest'
+      responses:
+        '201':
+          description: Event created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntityError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /events/{event_id}/divisions:
+    get:
+      tags: [Organizer]
+      summary: List divisions for event
+      parameters:
+        - name: event_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Divisions list retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Division'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [Organizer]
+      summary: Create division for event
+      parameters:
+        - name: event_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDivisionRequest'
+      responses:
+        '201':
+          description: Division created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Division'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntityError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /divisions/{event_division_id}:
+    get:
+      tags: [Organizer]
+      summary: Get division details
+      parameters:
+        - name: event_division_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Division retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Division'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /divisions/{event_division_id}/disciplines:
+    get:
+      tags: [Organizer]
+      summary: List disciplines for division
+      parameters:
+        - name: event_division_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Disciplines list retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Discipline'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [Organizer]
+      summary: Add discipline to division
+      parameters:
+        - name: event_division_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDisciplineRequest'
+      responses:
+        '201':
+          description: Discipline added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Discipline'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          description: Immutable stage - cannot modify after LIVE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error_code: IMMUTABLE_STAGE
+                message: "Disciplines cannot be modified after LIVE status"
+                details:
+                  current_status: LIVE
+                  attempted_action: ADD_DISCIPLINE
+                request_id: "req_abc123"
+        '422':
+          $ref: '#/components/responses/UnprocessableEntityError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /divisions/{event_division_id}/participants:
+    get:
+      tags: [Organizer]
+      summary: List participants for division
+      parameters:
+        - name: event_division_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [ATHLETE, TEAM]
+      responses:
+        '200':
+          description: Participants list retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Participant'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /divisions/{event_division_id}/participants/athletes:
+    post:
+      tags: [Organizer]
+      summary: Register athlete participant
+      parameters:
+        - name: event_division_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterAthleteRequest'
+      responses:
+        '201':
+          description: Athlete registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Participant'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          description: Immutable stage - cannot modify after LIVE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error_code: IMMUTABLE_STAGE
+                message: "Participants cannot be modified after LIVE status"
+                details:
+                  current_status: LIVE
+                  attempted_action: REGISTER_PARTICIPANT
+                request_id: "req_def456"
+        '422':
+          $ref: '#/components/responses/UnprocessableEntityError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /divisions/{event_division_id}/teams:
+    post:
+      tags: [Organizer]
+      summary: Create team (for TEAM_BATTLE)
+      parameters:
+        - name: event_division_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTeamRequest'
+      responses:
+        '201':
+          description: Team created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Team'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          description: Immutable stage - cannot modify after LIVE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error_code: IMMUTABLE_STAGE
+                message: "Teams cannot be modified after LIVE status"
+                details:
+                  current_status: LIVE
+                  attempted_action: CREATE_TEAM
+                request_id: "req_ghi789"
+        '422':
+          $ref: '#/components/responses/UnprocessableEntityError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /events/{event_id}/officials:
+    post:
+      tags: [Organizer]
+      summary: Assign official to event
+      parameters:
+        - name: event_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignOfficialRequest'
+      responses:
+        '201':
+          description: Official assigned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OfficialAssignment'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntityError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /divisions/{event_division_id}/submit:
+    post:
+      tags: [Organizer]
+      summary: Submit division for approval (DRAFT→SUBMITTED)
+      description: |
+        RELAY validation: if format=RELAY then relay_leg_count=2 and relay_time_cap_seconds=180 and exactly 2 disciplines.
+      parameters:
+        - name: event_division_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        '200':
+          description: Division submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Division'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          description: Invalid state transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error_code: INVALID_STATE_TRANSITION
+                message: "Cannot submit division from current status"
+                details:
+                  current_status: SUBMITTED
+                  required_status: DRAFT
+                  attempted_transition: SUBMIT
+                request_id: "req_jkl012"
+        '422':
+          $ref: '#/components/responses/UnprocessableEntityError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /divisions/{event_division_id}/approve:
+    post:
+      tags: [Organizer]
+      summary: Approve division (computes Q_effective, applies NOT_RATED rules)
+      description: |
+        Server computes:
+        - MESF: disciplines_count < 3 => NOT_RATED (Q=0)
+        - MIR: Q_requested >=4 and countries <3 => downgrade ONE tier
+        - TEAM_BATTLE: teams_count < 4 => NOT_RATED (Q=0, awards=0)
+        - TEAM_BATTLE: teams_count >=4 => Q=2 if countries>=3 else Q=1
+        - RELAY validation: if format=RELAY then relay_leg_count=2 and relay_time_cap_seconds=180 and exactly 2 disciplines.
+      parameters:
+        - name: event_division_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApproveDivisionRequest'
+      responses:
+        '200':
+          description: Division approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Division'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          description: Invalid state transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error_code: INVALID_STATE_TRANSITION
+                message: "Cannot approve division from current status"
+                details:
+                  current_status: DRAFT
+                  required_status: SUBMITTED
+                  attempted_transition: APPROVE
+                request_id: "req_mno345"
+        '422':
+          $ref: '#/components/responses/UnprocessableEntityError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /divisions/{event_division_id}/go-live:
+    post:
+      tags: [Organizer]
+      summary: Go live (locks coefficients, participants immutable)
+      parameters:
+        - name: event_division_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        '200':
+          description: Division is live
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Division'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          description: Invalid state transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error_code: INVALID_STATE_TRANSITION
+                message: "Cannot go live from current status"
+                details:
+                  current_status: DRAFT
+                  required_status: APPROVED
+                  attempted_transition: GO_LIVE
+                request_id: "req_pqr678"
+        '422':
+          $ref: '#/components/responses/UnprocessableEntityError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # LIVE JUDGING (HYBRID)
+  /live/divisions/{event_division_id}/sheet:
+    get:
+      tags: [Live]
+      summary: Get judging sheet for discipline
+      parameters:
+        - name: event_division_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: discipline_order
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 8
+      responses:
+        '200':
+          description: Judging sheet retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JudgingSheet'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          description: Division not in LIVE status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error_code: INVALID_STATUS
+                message: "Judging only available for LIVE divisions"
+                details:
+                  current_status: APPROVED
+                  required_status: LIVE
+                request_id: "req_stu901"
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /live/results:
+    post:
+      tags: [Live]
+      summary: Submit single result (idempotent)
+      description: |
+        TEAM_BATTLE rule: if division.format=TEAM_BATTLE, participant_type must be TEAM only.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitResultRequest'
+      responses:
+        '201':
+          description: Result recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          description: Division not LIVE or immutable stage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error_code: IMMUTABLE_STAGE
+                message: "Results cannot be entered after RESULTS_VALIDATED"
+                details:
+                  current_status: LOCKED
+                  attempted_action: SUBMIT_RESULT
+                request_id: "req_vwx234"
+        '422':
+          $ref: '#/components/responses/UnprocessableEntityError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /live/sync:
+    post:
+      tags: [Live]
+      summary: Batch sync results (offline/online hybrid)
+      description: |
+        Batch of idempotent writes for offline scenarios.
+        TEAM_BATTLE rule: if division.format=TEAM_BATTLE, participant_type must be TEAM only.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchSyncRequest'
+      responses:
+        '200':
+          description: Batch sync completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchSyncResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          description: Division not LIVE or immutable stage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error_code: IMMUTABLE_STAGE
+                message: "Batch sync not allowed after RESULTS_VALIDATED"
+                details:
+                  current_status: LOCKED
+                  attempted_action: BATCH_SYNC
+                request_id: "req_yza567"
+        '422':
+          $ref: '#/components/responses/UnprocessableEntityError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # RESULTS
+  /divisions/{event_division_id}/results/validate:
+    post:
+      tags: [Results]
+      summary: Validate results (move to RESULTS_VALIDATED)
+      description: |
+        Computes win_points for TEAM_BATTLE divisions.
+        Stores raw results and computed standings.
+      parameters:
+        - name: event_division_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        '200':
+          description: Results validated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Division'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          description: Invalid state transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error_code: INVALID_STATE_TRANSITION
+                message: "Cannot validate results from current status"
+                details:
+                  current_status: APPROVED
+                  required_status: LIVE
+                  attempted_transition: VALIDATE_RESULTS
+                request_id: "req_bcd890"
+        '422':
+          $ref: '#/components/responses/UnprocessableEntityError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /divisions/{event_division_id}/lock:
+    post:
+      tags: [Results]
+      summary: Lock division (creates snapshot, commits awards, generates PDF)
+      description: |
+        Finalizes division:
+        - Creates results snapshot
+        - Computes and commits ranking awards (ATHLETE awards for TEAM_BATTLE)
+        - Generates protocol PDF
+        - Status becomes LOCKED (immutable)
+      parameters:
+        - name: event_division_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        '200':
+          description: Division locked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DivisionLockResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          description: Invalid state transition or results not validated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error_code: INVALID_STATE_TRANSITION
+                message: "Cannot lock division from current status"
+                details:
+                  current_status: LIVE
+                  required_status: RESULTS_VALIDATED
+                  attempted_transition: LOCK
+                request_id: "req_efg123"
+        '422':
+          $ref: '#/components/responses/UnprocessableEntityError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /divisions/{event_division_id}/protocol.pdf:
+    get:
+      tags: [Results]
+      summary: Get protocol PDF (A4 landscape)
+      parameters:
+        - name: event_division_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: PDF protocol
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          description: PDF not yet generated (division not LOCKED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error_code: NOT_AVAILABLE
+                message: "Protocol PDF only available after LOCK"
+                details:
+                  current_status: RESULTS_VALIDATED
+                  required_status: LOCKED
+                request_id: "req_hij456"
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ADMIN OVERRIDE (Post-Lock)
+  /admin/divisions/{event_division_id}/override:
+    post:
+      tags: [Admin]
+      summary: Admin override for locked division
+      description: |
+        Allows correction of results after LOCK with full audit trail.
+        Requires admin role.
+      parameters:
+        - name: event_division_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminOverrideRequest'
+      responses:
+        '200':
+          description: Override applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Division'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          description: Division not in LOCKED status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error_code: INVALID_STATUS
+                message: "Override only available for LOCKED divisions"
+                details:
+                  current_status: LIVE
+                  required_status: LOCKED
+                request_id: "req_klm789"
+        '422':
+          $ref: '#/components/responses/UnprocessableEntityError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token for authentication
+
+  schemas:
+    # Request/Response Schemas
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+          minLength: 8
+
+    LoginResponse:
+      type: object
+      required: [access_token, token_type, expires_in]
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+        user:
+          $ref: '#/components/schemas/UserProfile'
+
+    UserProfile:
+      type: object
+      required: [user_id, email, role]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [ADMIN, ORGANIZER, JUDGE, ATHLETE, VIEWER]
+        first_name:
+          type: string
+        last_name:
+          type: string
+
+    CreateEventRequest:
+      type: object
+      required: [name, start_date, end_date, location]
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        location:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 1000
+
+    Event:
+      type: object
+      required: [event_id, name, status, start_date, end_date, location, created_at]
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+          enum: [DRAFT, ACTIVE, ARCHIVED]
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        location:
+          type: string
+        description:
+          type: string
+        divisions:
+          type: array
+          items:
+            $ref: '#/components/schemas/DivisionSummary'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    DivisionSummary:
+      type: object
+      required: [event_division_id, division_name, format, status]
+      properties:
+        event_division_id:
+          type: string
+          format: uuid
+        division_name:
+          type: string
+        format:
+          type: string
+          enum: [CLASSIC, PARA, RELAY, TEAM_BATTLE]
+        status:
+          type: string
+          enum: [DRAFT, SUBMITTED, APPROVED, LIVE, RESULTS_VALIDATED, LOCKED]
+
+    CreateDivisionRequest:
+      type: object
+      required: [division_name, format, gender_category]
+      properties:
+        division_name:
+          type: string
+          maxLength: 100
+        format:
+          type: string
+          enum: [CLASSIC, PARA, RELAY, TEAM_BATTLE]
+        gender_category:
+          type: string
+          enum: [MEN, WOMEN, MIXED]
+        q_requested:
+          type: number
+          minimum: 0
+          maximum: 6
+          description: Requested tournament coefficient (subject to approval rules)
+        relay_leg_count:
+          type: integer
+          nullable: true
+          description: Required for RELAY format
+        relay_time_cap_seconds:
+          type: integer
+          nullable: true
+          description: Required for RELAY format
+
+    Division:
+      type: object
+      required: [event_division_id, event_id, division_name, format, gender_category, status, q_effective]
+      properties:
+        event_division_id:
+          type: string
+          format: uuid
+        event_id:
+          type: string
+          format: uuid
+        division_name:
+          type: string
+        format:
+          type: string
+          enum: [CLASSIC, PARA, RELAY, TEAM_BATTLE]
+        gender_category:
+          type: string
+          enum: [MEN, WOMEN, MIXED]
+        status:
+          type: string
+          enum: [DRAFT, SUBMITTED, APPROVED, LIVE, RESULTS_VALIDATED, LOCKED]
+        q_requested:
+          type: number
+        q_effective:
+          type: number
+          description: Computed Q after approval rules (MESF, MIR, TEAM_BATTLE)
+        is_rated:
+          type: boolean
+          description: false if NOT_RATED (Q=0)
+        disciplines_count:
+          type: integer
+        teams_count:
+          type: integer
+          nullable: true
+        mir_country_count:
+          type: integer
+          nullable: true
+        relay_leg_count:
+          type: integer
+          nullable: true
+        relay_time_cap_seconds:
+          type: integer
+          nullable: true
+        downgrade_reason_code:
+          type: string
+          nullable: true
+          enum: [MESF_INSUFFICIENT_DISCIPLINES, MIR_COUNTRY_THRESHOLD, TEAM_BATTLES_Q_FIXED_2, TEAM_BATTLES_Q_FIXED_1, TEAM_BATTLES_NOT_RATED]
+        disciplines:
+          type: array
+          items:
+            $ref: '#/components/schemas/Discipline'
+        created_at:
+          type: string
+          format: date-time
+
+    CreateDisciplineRequest:
+      type: object
+      required: [name, order_index, primary_metric]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        order_index:
+          type: integer
+          minimum: 1
+          maximum: 8
+        primary_metric:
+          type: string
+          enum: [TIME, REPS, WEIGHT, DISTANCE, POINTS]
+        fallback_metric:
+          type: string
+          enum: [TIME, REPS, WEIGHT, DISTANCE, POINTS]
+          nullable: true
+          description: Fallback metric if primary not achieved within time_cap
+        time_cap_seconds:
+          type: integer
+          nullable: true
+          description: Time cap for fallback scoring
+        unit:
+          type: string
+          enum: [SECONDS, REPS, KG, METERS, POINTS]
+
+    Discipline:
+      type: object
+      required: [event_discipline_id, event_division_id, name, order_index, primary_metric]
+      properties:
+        event_discipline_id:
+          type: string
+          format: uuid
+        event_division_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        order_index:
+          type: integer
+        primary_metric:
+          type: string
+          enum: [TIME, REPS, WEIGHT, DISTANCE, POINTS]
+        fallback_metric:
+          type: string
+          enum: [TIME, REPS, WEIGHT, DISTANCE, POINTS]
+          nullable: true
+        time_cap_seconds:
+          type: integer
+          nullable: true
+        unit:
+          type: string
+        is_locked:
+          type: boolean
+          description: true if discipline results finalized
+
+    AssignOfficialRequest:
+      type: object
+      required: [user_id, role]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [HEAD_JUDGE, JUDGE, TECHNICAL_CONTROLLER]
+
+    OfficialAssignment:
+      type: object
+      required: [assignment_id, event_id, user_id, role, assigned_at]
+      properties:
+        assignment_id:
+          type: string
+          format: uuid
+        event_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        role:
+          type: string
+        assigned_at:
+          type: string
+          format: date-time
+
+    RegisterAthleteRequest:
+      type: object
+      required: [wsm_athlete_id]
+      properties:
+        wsm_athlete_id:
+          type: string
+          pattern: '^ATH-[A-Z0-9]{6}$'
+        bib_number:
+          type: integer
+          minimum: 1
+
+    CreateTeamRequest:
+      type: object
+      required: [team_name, member_athlete_ids]
+      properties:
+        team_name:
+          type: string
+          maxLength: 100
+        member_athlete_ids:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items:
+            type: string
+            pattern: '^ATH-[A-Z0-9]{6}$'
+        country_code:
+          type: string
+          pattern: '^[A-Z]{3}$'
+
+    Team:
+      type: object
+      required: [team_id, event_division_id, team_name, members, country_code]
+      properties:
+        team_id:
+          type: string
+          format: uuid
+        event_division_id:
+          type: string
+          format: uuid
+        team_name:
+          type: string
+        country_code:
+          type: string
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamMember'
+        created_at:
+          type: string
+          format: date-time
+
+    TeamMember:
+      type: object
+      required: [athlete_id, wsm_athlete_id, first_name, last_name]
+      properties:
+        athlete_id:
+          type: string
+          format: uuid
+        wsm_athlete_id:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        country_of_representation:
+          type: string
+
+    Participant:
+      type: object
+      required: [participant_id, event_division_id, participant_type, status]
+      properties:
+        participant_id:
+          type: string
+          format: uuid
+        event_division_id:
+          type: string
+          format: uuid
+        participant_type:
+          type: string
+          enum: [ATHLETE, TEAM]
+        athlete_id:
+          type: string
+          format: uuid
+          nullable: true
+        team_id:
+          type: string
+          format: uuid
+          nullable: true
+        bib_number:
+          type: integer
+        status:
+          type: string
+          enum: [ACTIVE, WITHDRAWN, DQ]
+        athlete_profile:
+          $ref: '#/components/schemas/AthleteProfile'
+          nullable: true
+
+    AthleteProfile:
+      type: object
+      required: [wsm_athlete_id, first_name, last_name, country_of_representation]
+      properties:
+        wsm_athlete_id:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        country_of_representation:
+          type: string
+        date_of_birth:
+          type: string
+          format: date
+        gender:
+          type: string
+          enum: [M, F]
+        para_classification:
+          type: string
+          nullable: true
+        total_points:
+          type: number
+        global_rank:
+          type: integer
+
+    ApproveDivisionRequest:
+      type: object
+      properties:
+        notes:
+          type: string
+          maxLength: 500
+
+    SubmitResultRequest:
+      type: object
+      required: [event_discipline_id, participant_id, participant_type, primary_value, status_flag]
+      properties:
+        event_discipline_id:
+          type: string
+          format: uuid
+        participant_id:
+          type: string
+          format: uuid
+        participant_type:
+          type: string
+          enum: [ATHLETE, TEAM]
+        primary_value:
+          type: number
+          format: double
+          description: Primary metric value (time in seconds, reps, weight, distance, or points)
+        secondary_value:
+          type: number
+          format: double
+          nullable: true
+          description: Fallback metric value if primary not achieved within time_cap
+        status_flag:
+          type: string
+          enum: [OK, DNF, DQ, DNS]
+        judge_notes:
+          type: string
+          maxLength: 500
+
+    Result:
+      type: object
+      required: [result_id, event_discipline_id, participant_id, primary_value, status_flag, judge_user_id, recorded_at]
+      properties:
+        result_id:
+          type: string
+          format: uuid
+        event_discipline_id:
+          type: string
+          format: uuid
+        participant_id:
+          type: string
+          format: uuid
+        participant_type:
+          type: string
+          enum: [ATHLETE, TEAM]
+        primary_value:
+          type: number
+          format: double
+          description: Primary metric value (time in seconds, reps, weight, distance, or points)
+        secondary_value:
+          type: number
+          format: double
+          nullable: true
+          description: Fallback metric value if primary not achieved within time_cap
+        status_flag:
+          type: string
+          enum: [OK, DNF, DQ, DNS]
+        judge_user_id:
+          type: string
+          format: uuid
+        judge_notes:
+          type: string
+        recorded_at:
+          type: string
+          format: date-time
+        is_synced:
+          type: boolean
+
+    JudgingSheet:
+      type: object
+      required: [event_discipline_id, discipline_name, order_index, participants, primary_metric]
+      properties:
+        event_discipline_id:
+          type: string
+          format: uuid
+        discipline_name:
+          type: string
+        order_index:
+          type: integer
+        primary_metric:
+          type: string
+        fallback_metric:
+          type: string
+          nullable: true
+        time_cap_seconds:
+          type: integer
+          nullable: true
+        unit:
+          type: string
+        participants:
+          type: array
+          items:
+            $ref: '#/components/schemas/JudgingSheetParticipant'
+
+    JudgingSheetParticipant:
+      type: object
+      required: [participant_id, bib_number, name, country]
+      properties:
+        participant_id:
+          type: string
+          format: uuid
+        bib_number:
+          type: integer
+        name:
+          type: string
+        country:
+          type: string
+        existing_result:
+          $ref: '#/components/schemas/Result'
+          nullable: true
+
+    BatchSyncRequest:
+      type: object
+      required: [event_division_id, results]
+      properties:
+        event_division_id:
+          type: string
+          format: uuid
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SubmitResultRequest'
+
+    BatchSyncResponse:
+      type: object
+      required: [processed, failed, errors]
+      properties:
+        processed:
+          type: integer
+        failed:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              index:
+                type: integer
+              error:
+                type: string
+
+    DivisionResultsPublic:
+      type: object
+      required: [event_division_id, status, format, disciplines, overall_standings, awards]
+      properties:
+        event_division_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [RESULTS_VALIDATED, LOCKED]
+        format:
+          type: string
+          enum: [CLASSIC, PARA, RELAY, TEAM_BATTLE]
+        disciplines:
+          type: array
+          items:
+            type: object
+            properties:
+              event_discipline_id:
+                type: string
+                format: uuid
+              name:
+                type: string
+              order_index:
+                type: integer
+              results:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    result_id:
+                      type: string
+                      format: uuid
+                    participant_id:
+                      type: string
+                      format: uuid
+                    participant_type:
+                      type: string
+                      enum: [ATHLETE, TEAM]
+                    primary_value:
+                      type: number
+                      format: double
+                    secondary_value:
+                      type: number
+                      format: double
+                      nullable: true
+                    status_flag:
+                      type: string
+                      enum: [OK, DNF, DQ, DNS]
+                    display_value:
+                      type: string
+                      description: Formatted single-cell display value
+                    judge_user_id:
+                      type: string
+                      format: uuid
+                    recorded_at:
+                      type: string
+                      format: date-time
+        overall_standings:
+          type: array
+          items:
+            $ref: '#/components/schemas/OverallStanding'
+        awards:
+          type: array
+          items:
+            $ref: '#/components/schemas/RankingAward'
+          description: Empty until LOCKED
+
+    OverallStanding:
+      type: object
+      required: [participant_id, overall_place, total_points, discipline_scores]
+      properties:
+        participant_id:
+          type: string
+          format: uuid
+        participant_type:
+          type: string
+          enum: [ATHLETE, TEAM]
+        overall_place:
+          type: integer
+        total_points:
+          type: number
+          format: double
+        discipline_scores:
+          type: array
+          items:
+            type: object
+            properties:
+              discipline_order:
+                type: integer
+              points_earned:
+                type: number
+                format: double
+              win_points:
+                type: integer
+                description: Computed win points (TEAM_BATTLE only)
+
+    RankingList:
+      type: object
+      required: [division, format, athletes, generated_at]
+      properties:
+        division:
+          type: string
+        format:
+          type: string
+        athletes:
+          type: array
+          items:
+            $ref: '#/components/schemas/RankingEntry'
+        generated_at:
+          type: string
+          format: date-time
+
+    RankingEntry:
+      type: object
+      required: [rank, wsm_athlete_id, name, country, total_points]
+      properties:
+        rank:
+          type: integer
+        wsm_athlete_id:
+          type: string
+        name:
+          type: string
+        country:
+          type: string
+        total_points:
+          type: number
+          format: double
+        events_count:
+          type: integer
+
+    RankingAward:
+      type: object
+      required: [award_id, event_division_id, athlete_id, place, p_event, q_effective, s_value, created_at]
+      properties:
+        award_id:
+          type: string
+          format: uuid
+        event_division_id:
+          type: string
+          format: uuid
+        athlete_id:
+          type: string
+          format: uuid
+        place:
+          type: integer
+        p_event:
+          type: integer
+          description: Placement points (N_top - place + 1)
+        q_effective:
+          type: number
+        s_value:
+          type: number
+          format: double
+          description: Final score (P_event × Q_effective, or 0.5 if place > 10)
+        created_at:
+          type: string
+          format: date-time
+
+    DivisionLockResponse:
+      type: object
+      required: [event_division_id, status, snapshot_id, awards_committed, pdf_url]
+      properties:
+        event_division_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [LOCKED]
+        snapshot_id:
+          type: string
+          format: uuid
+        awards_committed:
+          type: integer
+          description: Number of ranking awards created
+        pdf_url:
+          type: string
+          format: uri
+          description: URL to generated protocol PDF
+
+    AdminOverrideRequest:
+      type: object
+      required: [override_type, reason, changes]
+      properties:
+        override_type:
+          type: string
+          enum: [RESULT_CORRECTION, STATUS_ROLLBACK, AWARD_ADJUSTMENT]
+        reason:
+          type: string
+          maxLength: 1000
+        changes:
+          type: object
+          description: Specific changes to apply
+        audit_note:
+          type: string
+          maxLength: 500
+        admin_signature:
+          type: string
+          description: Digital signature or approval code
+
+    # Error Schema
+    ErrorResponse:
+      type: object
+      required: [error_code, message, request_id]
+      properties:
+        error_code:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+        timestamp:
+          type: string
+          format: date-time
+        request_id:
+          type: string
+
+  responses:
+    ValidationError:
+      description: Validation failed for request data
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error_code: VALIDATION_ERROR
+            message: "Request validation failed"
+            details:
+              - field: "disciplines"
+                message: "RELAY format requires exactly 2 disciplines with relay_leg_count=2 and relay_time_cap_seconds=180"
+            timestamp: "2024-01-15T10:30:00Z"
+            request_id: "req_val_001"
+
+    UnauthorizedError:
+      description: Authentication required or invalid credentials
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error_code: UNAUTHORIZED
+            message: "Invalid or missing authentication token"
+            timestamp: "2024-01-15T10:30:00Z"
+            request_id: "req_auth_001"
+
+    ForbiddenError:
+      description: Insufficient permissions for this operation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error_code: FORBIDDEN
+            message: "User does not have required role for this operation"
+            details:
+              - field: "role"
+                message: "Required role: ORGANIZER, Current role: VIEWER"
+            timestamp: "2024-01-15T10:30:00Z"
+            request_id: "req_forb_001"
+
+    NotFoundError:
+      description: Requested resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error_code: NOT_FOUND
+            message: "Event division not found"
+            details:
+              - field: "event_division_id"
+                message: "Resource not found: 550e8400-e29b-41d4-a716-446655440000"
+            timestamp: "2024-01-15T10:30:00Z"
+            request_id: "req_nf_001"
+
+    ConflictError:
+      description: Resource conflict or duplicate entry
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error_code: CONFLICT
+            message: "Team with this name already exists in division"
+            details:
+              - field: "team_name"
+                message: "Value already exists: Thunder Squad"
+            timestamp: "2024-01-15T10:30:00Z"
+            request_id: "req_conf_001"
+
+    UnprocessableEntityError:
+      description: Business rule violation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error_code: UNPROCESSABLE_ENTITY
+            message: "Business rule violation"
+            details:
+              - field: "q_requested"
+                message: "Invalid Q value for format CLASSIC"
+            timestamp: "2024-01-15T10:30:00Z"
+            request_id: "req_422_001"
+
+    TooManyRequestsError:
+      description: Rate limit exceeded
+      headers:
+        Retry-After:
+          description: Seconds to wait before retry
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error_code: TOO_MANY_REQUESTS
+            message: "Rate limit exceeded"
+            details:
+              - field: "limit"
+                message: "100 requests per minute"
+            timestamp: "2024-01-15T10:30:00Z"
+            request_id: "req_rate_001"
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error_code: INTERNAL_ERROR
+            message: "An unexpected error occurred"
+            timestamp: "2024-01-15T10:30:00Z"
+            request_id: "req_int_001"
+```
