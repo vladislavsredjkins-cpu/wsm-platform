@@ -1616,7 +1616,8 @@ components:
           type: string
           enum: [ACTIVE, WITHDRAWN, DQ]
         athlete_profile:
-          $ref: '#/components/schemas/AthleteProfile'
+          allOf:
+            - $ref: '#/components/schemas/AthleteProfile'
           nullable: true
 
     AthleteProfile:
@@ -1760,7 +1761,8 @@ components:
         country:
           type: string
         existing_result:
-          $ref: '#/components/schemas/Result'
+          allOf:
+            - $ref: '#/components/schemas/Result'
           nullable: true
 
     BatchSyncRequest:
