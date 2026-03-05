@@ -1,32 +1,27 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 
-app = FastAPI(title="World Strongman Platform API")
-
+app = FastAPI(title="World Strongman Platform API", version="1.0.0")
 
 @app.get("/")
 def root():
-    return {"message": "World Strongman Platform API"}
-
+    return {"status": "ok"}
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
-
 @app.get("/ranking")
-def ranking(
-    division: str = "MEN",
-    format: str = "CLASSIC",
-    limit: int = 10,
-    offset: int = 0
+def get_ranking(
+    division: str = Query("MEN"),
+    format: str = Query("CLASSIC"),
+    limit: int = Query(10, ge=1, le=100),
+    offset: int = Query(0, ge=0),
 ):
+    # временная заглушка — важно, чтобы endpoint существовал
     return {
         "division": division,
         "format": format,
         "limit": limit,
         "offset": offset,
-        "athletes": [
-            {"name": "Tom Stoltman", "country": "UK", "points": 1200},
-            {"name": "Oleksii Novikov", "country": "Ukraine", "points": 1180}
-        ]
+        "items": []
     }
