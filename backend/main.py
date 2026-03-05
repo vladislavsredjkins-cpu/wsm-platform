@@ -10,6 +10,10 @@ def root():
 def health():
     return {"status": "ok"}
 
+@app.get("/__build")
+def __build():
+    return {"service": "wsm-platform-backend", "build": "RANKING_V1"}
+
 @app.get("/ranking")
 def get_ranking(
     division: str = Query("MEN"),
@@ -27,4 +31,5 @@ def get_ranking(
     }
     @app.get("/__build")
 def __build():
-    return {"service": "wsm-platform-backend", "build": "RANKING_V1"}
+    return {"service": "wsm-platform-backend", "build": "RANKING_V1"} 
+    
