@@ -32,4 +32,6 @@ def get_ranking(
     @app.get("/__build")
 def __build():
     return {"service": "wsm-platform-backend", "build": "RANKING_V1"} 
-    
+   @app.get("/__build")
+def __build():
+    return {"service": "wsm-platform-backend", "build": "RANKING_V1"} 
