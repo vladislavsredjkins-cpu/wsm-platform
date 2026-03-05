@@ -10,8 +10,10 @@ info:
     name: WSM Platform Team
 
 servers:
+  - url: https://wsm-platform-backend.onrender.com
+    description: Render backend (temporary)
   - url: https://api.wsm-platform.com/v1
-    description: Production server
+    description: Production (custom domain)
 
 security:
   - BearerAuth: []
