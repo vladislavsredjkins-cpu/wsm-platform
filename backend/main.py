@@ -25,3 +25,6 @@ def get_ranking(
         "offset": offset,
         "items": []
     }
+    @app.get("/__build")
+def __build():
+    return {"service": "wsm-platform-backend", "build": "RANKING_V1"}
