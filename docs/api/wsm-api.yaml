@@ -11,9 +11,7 @@ info:
 
 servers:
   - url: https://wsm-platform-backend.onrender.com
-    description: Render backend (temporary)
-  - url: https://api.wsm-platform.com/v1
-    description: Production (custom domain)
+    description: Render backend
 
 security:
   - BearerAuth: []
