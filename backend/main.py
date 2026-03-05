@@ -11,7 +11,7 @@ def health():
     return {"status": "ok"}
 
 @app.get("/__build")
-def __build():
+def build():
     return {"service": "wsm-platform-backend", "build": "RANKING_V1"}
 
 @app.get("/ranking")
@@ -21,7 +21,6 @@ def get_ranking(
     limit: int = Query(10, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
-    # временная заглушка — важно, чтобы endpoint существовал
     return {
         "division": division,
         "format": format,
@@ -29,9 +28,3 @@ def get_ranking(
         "offset": offset,
         "items": []
     }
-    @app.get("/__build")
-def __build():
-    return {"service": "wsm-platform-backend", "build": "RANKING_V1"} 
-   @app.get("/__build")
-def __build():
-    return {"service": "wsm-platform-backend", "build": "RANKING_V1"} 
