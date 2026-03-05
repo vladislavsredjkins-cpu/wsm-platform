@@ -10,7 +10,7 @@ info:
     name: WSM Platform Team
 
 servers:
-  - url: https://api.wsm-platform.com/v1
+  - url: https://wsm-platform-backend.onrender.com/
     description: Production server
 
 security:
