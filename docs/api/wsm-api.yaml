@@ -4,7 +4,7 @@ info:
   description: |
     World Strongman (WSM) Platform MVP API.
     Ranking Policy v1.1: Placement System B + Tournament Coefficient Q.
-    Lifecycle: DRAFT → SUBMITTED → APPROVED → LIVE → RESULTS_VALIDATED → LOCKED
+    Lifecycle: DRAFT -> SUBMITTED -> APPROVED -> LIVE -> RESULTS_VALIDATED -> LOCKED
   version: 1.0.0
   contact:
     name: WSM Platform Team
